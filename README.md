@@ -47,7 +47,7 @@ Open the report in a browser:
 
     target/scala-3.7.4/scoverage-report/index.html
 
-Current coverage: ~98% statement, ~93% branch.
+Current coverage: 100% statement, 100% branch.
 
 ## Extra Credit Features
 
@@ -55,18 +55,18 @@ Current coverage: ~98% statement, ~93% branch.
 
 ## Architecture
 
-Uses the **Observer design pattern** to separate computation from I/O, following the instructor's `iterators-scala` reference:
+Uses a **purely functional pipeline** following the instructor's `iterators-scala` functional modular pattern:
 
-- `TopWordsComputation` - core sliding window + frequency map, emits `Seq[(String, Int)]` results
-- `Observer` - base trait with `update(result)` method
-- `StdoutObserver` - production observer that formats and prints word clouds, handles SIGPIPE
-- `OutputToBuffer` - test observer that collects structured results in a buffer
+- `TopWordsComputation` trait — pure function `Iterator[String] => Iterator[Seq[(String, Int)]]` using `Iterator.scanLeft` with an immutable `WindowState(Queue, Map)` accumulator
+- `formatCloud` — formats a word cloud as a space-separated string
+- `runWithStdIO` — consumes the result iterator, printing to stdout with SIGPIPE handling via `takeWhile(!System.out.checkError())`
+- `Main` — CLI entry point with mainargs, wires stdin → computation → runWithStdIO
 
-This separation allows tests to verify computation results directly as structured data without parsing string output.
+No mutable state (`var`, `mutable.Queue`, `mutable.Map`) or Observer pattern. The computation returns a lazy `Iterator[Result]` that callers consume directly — tests call `.toList`, production pipes through `runWithStdIO`.
 
 ## Scalability
 
-Runs in constant space using a bounded `mutable.Queue` and `mutable.Map` with cleanup. Verified with:
+Runs in constant space using immutable `Queue` (amortized O(1) enqueue/dequeue) and immutable `Map` (O(log n) update). The `scanLeft` pipeline processes one word at a time, holding only the current `WindowState`. Verified with:
 
     yes helloworld | ./target/universal/stage/bin/topwords-scala > /dev/null
 

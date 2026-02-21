@@ -103,7 +103,7 @@ Final coverage: 97.8% statement, 92.9% branch.
 6. **Case-sensitive** — Assignment examples show "Bishop" and "bishop" as distinct words
 7. **No output until window full** — Per spec: "will not print anything for the first n - 1 words"
 
-## Key Files
+## Key Files (Imperative Version)
 
 | File | Purpose |
 |------|---------|
@@ -114,3 +114,79 @@ Final coverage: 97.8% statement, 92.9% branch.
 | `src/test/scala/edu/luc/cs/cs371/topwords/TestTopWords.scala` | Computation tests (12) |
 | `src/test/scala/edu/luc/cs/cs371/topwords/TestObserver.scala` | Observer tests (2) |
 | `src/test/scala/edu/luc/cs/cs371/topwords/TestMain.scala` | Integration tests (20) |
+
+---
+
+## Session 8: Functional Reimplementation (Project 1c)
+
+**Tool used:** Claude Opus 4.6 (via Claude Code CLI)
+
+### 8.1 Design Discussion
+
+**User prompt:** Provided the full project 1c assignment spec requiring a purely functional reimplementation with no mutable state, using `Iterator.scanLeft`, Scala traits for modularity, and tests for interactive behavior.
+
+**LLM actions:**
+1. Explored the existing codebase (all source files, build config, tests, README)
+2. Fetched and analyzed the instructor's `echotest-scala` and `iterators-scala` reference repos to understand the expected trait structure and functional patterns
+3. Proposed 3 approaches:
+   - **A (Recommended):** Functional modular with `scanLeft`, traits, matches instructor patterns exactly
+   - **B:** Monolithic functional — simpler but misses modularity requirement
+   - **C:** LazyList-based — different trade-offs, breaks O(1) memory
+
+**User choice:** Approach A
+
+### 8.2 Design Sections
+
+**LLM presented design in 3 sections:**
+
+1. **Core computation:** Immutable `WindowState(Queue, Map)` case class + `TopWordsComputation` trait with `process` returning `Iterator[Seq[(String, Int)]]` via `scanLeft` pipeline
+2. **Trait modularity:** `TopWordsComputation` trait + `formatCloud` + `runWithStdIO` in common.scala; Main wires everything together. No Observer pattern.
+3. **Testing strategy:** Tests call `process().toList` directly. Interactive behavior verified with tracing iterators that record when elements are pulled.
+
+**User approved all sections.**
+
+### 8.3 Implementation
+
+**LLM wrote the implementation plan** (saved to `docs/plans/2026-02-21-functional-topwords.md`) with 8 tasks.
+
+**Execution:**
+
+**Task 1-2: Rewrite common.scala and Main.scala**
+- Replaced `Observer`/`StdoutObserver`/`OutputToBuffer` traits with `TopWordsComputation` trait using `scanLeft`
+- Added `WindowState` case class with immutable `Queue` and `Map`
+- Added `formatCloud` and `runWithStdIO` functions
+- Deleted `TopWords.scala` (computation merged into common.scala trait)
+- Main now calls `computation.process(words)` piped through `runWithStdIO`
+- Smoke test confirmed output matches README example
+
+**Task 3-5: Rewrite all tests**
+- `TestTopWords`: Rewrote 12 tests to call `process().toList` instead of using `OutputToBuffer`
+- Added 3 interactive behavior tests:
+  - Lazy output test: pulls results one at a time from the iterator
+  - Tracing iterator test: wraps input in a counting iterator, verifies each output pulls exactly one more input
+  - `formatCloud` unit tests
+- `TestMain`: Fixed `Console.withOut` wrapping needed because `println` uses `Console.out`, not `System.out`
+- Deleted `TestObserver.scala` (Observer pattern eliminated)
+
+**Issue encountered:** Initial `TestMain` failures (10/16 tests) because `runWithStdIO` uses `println` which goes to `Console.out`, but tests only redirected `System.out`. Fixed by adding `Console.withOut(baos)` wrapper around the `System.setOut` calls.
+
+**Task 6: Coverage**
+- Result: **100% statement coverage, 100% branch coverage** (31 tests)
+
+### 8.4 Design Decisions (Functional Version)
+
+1. **`Iterator.scanLeft` instead of `mutable.Queue`/`mutable.Map`** — each step produces a new immutable `WindowState`, no mutation
+2. **`case class WindowState` with `derives CanEqual`** — needed for `-language:strictEquality` compiler flag
+3. **No Observer pattern** — computation returns `Iterator[Result]`, caller decides consumption (`.toList` for tests, `runWithStdIO` for production)
+4. **`runWithStdIO` with `takeWhile`** — SIGPIPE handled by checking `System.out.checkError()` before each print
+5. **Tracing iterator for interactive tests** — wraps input iterator to count pulls, verifying lazy one-at-a-time processing
+
+## Key Files (Functional Version)
+
+| File | Purpose |
+|------|---------|
+| `src/main/scala/edu/luc/cs/cs371/topwords/common.scala` | TopWordsComputation trait, WindowState, formatCloud, runWithStdIO |
+| `src/main/scala/edu/luc/cs/cs371/topwords/Main.scala` | CLI entry point with mainargs |
+| `src/main/resources/logback.xml` | Logging configuration |
+| `src/test/scala/edu/luc/cs/cs371/topwords/TestTopWords.scala` | Computation + interactive behavior tests (15) |
+| `src/test/scala/edu/luc/cs/cs371/topwords/TestMain.scala` | Integration tests (16) |
