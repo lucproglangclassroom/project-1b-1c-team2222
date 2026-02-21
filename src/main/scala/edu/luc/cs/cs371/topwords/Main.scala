@@ -28,17 +28,18 @@ object Main extends LazyLogging:
 
     logger.debug(s"howMany=$cloudSize minLength=$lengthAtLeast lastNWords=$windowSize")
 
-    val computation = new TopWordsComputation with StdoutObserver:
-      override val howMany = cloudSize
-      override val atLeast = lengthAtLeast
-      override val lastNWords = windowSize
-      override val ignore = ignoreSet
+    val computation = new TopWordsComputation:
+      override val howMany: Int = cloudSize
+      override val atLeast: Int = lengthAtLeast
+      override val lastNWords: Int = windowSize
+      override val ignore: Set[String] = ignoreSet
 
     val words =
       import scala.language.unsafeNulls
       scala.io.Source.stdin.getLines().flatMap(l => l.split("(?U)[^\\p{Alpha}0-9']+")).filter(_.nonEmpty)
 
-    computation.process(words)
+    val results = computation.process(words)
+    runWithStdIO(results)
 
   def main(args: Array[String]): Unit =
     ParserForMethods(this).runOrExit(args.toIndexedSeq)
